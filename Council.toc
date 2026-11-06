@@ -1,0 +1,31 @@
+## Interface: 16001
+## Title: |cffc3e05aCouncil|r
+## Notes: Your guild's loot and records: reserves and SR+, rolls, master loot, and a shared history of who got what in every raid and dungeon. Powered by NorgannonDB. /council
+## Author: Maro
+## Version: 0.1.0
+## X-License: All Rights Reserved
+## Dependencies: NorgannonDB, NorgannonDB_Core
+## SavedVariables: CouncilDB
+## IconTexture: Interface\AddOns\NorgannonDB_Core\media\marks\council
+## AddonCompartmentFunc: Council_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: Council_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: Council_OnAddonCompartmentLeave
+
+serial.lua
+hash.lua
+ledger.lua
+state.lua
+ladder.lua
+sync.lua
+core.lua
+roster.lua
+transport.lua
+capture.lua
+lootmaster.lua
+window.lua
+pane_loot.lua
+pane_reserves.lua
+pane_history.lua
+pane_players.lua
+pane_records.lua
+settings.lua
