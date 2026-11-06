@@ -56,18 +56,23 @@ function C.Now() return C.Global("GetServerTime") or time() end
 function C.Clock() return GetTime() end
 
 ---A player's name as records hold it: bare on our own realm, with the realm otherwise. nil for a secret name.
+---Forever's loot lines and C_LootHistory say "Arhara Dawnstrider" where the roster and UnitName say "Arhara" (seen in
+---/cprobe's results), so anything after a space is dropped, or nobody's reserve would match their loot.
 function C.Short(name)
   if type(name) ~= "string" or Core.IsSecret(name) or name == "" then return nil end
+  name = name:match("^%S+") or name
   local short = C.Global("Ambiguate", name, "none")
   return short or name
 end
 
 function C.Me() return C.Short((C.Global("UnitName", "player"))) end
 
----Why add-on messages can't go out right now, or nil: "realm" means never here, "lockdown" means for now.
+---Why add-on messages can't go out right now, or nil: "lockdown" means for now, "refused" means the game turned down our
+---last test message. C_ChatInfo.AreOutgoingAddonChatMessagesRestricted doesn't decide this: /cprobe found it true on
+---Forever while add-on messages from others kept arriving, so only a real send can say.
 function C.SendBlocked()
-  if C.In("C_ChatInfo", "AreOutgoingAddonChatMessagesRestricted") then return "realm" end
   if C.In("C_ChatInfo", "InChatMessagingLockdown") then return "lockdown" end
+  if C.Transport and C.Transport.refused then return "refused" end
   return nil
 end
 
@@ -89,15 +94,20 @@ function C.ItemName(id, link)
   return C.In("C_Item", "GetItemNameByID", id) or Core.DB:Name("items", id) or ("Item " .. tostring(id))
 end
 
-function C.ItemColor(id)
-  local quality = C.In("C_Item", "GetItemQualityByID", id)
+---An item's quality from a link, as this client writes them: "|cnIQ3:|Hitem:..."; nil if it doesn't say.
+function C.LinkQuality(link)
+  return type(link) == "string" and tonumber(link:match("|cnIQ(%d+):")) or nil
+end
+
+function C.ItemColor(id, link)
+  local quality = C.In("C_Item", "GetItemQualityByID", id) or C.LinkQuality(link)
   local colors = rawget(_G, "ITEM_QUALITY_COLORS")
   local color = quality and colors and colors[quality]
   return color and color.hex or "|cffa335ee"
 end
 
 function C.ItemText(id, link)
-  return C.ItemColor(id) .. C.ItemName(id, link) .. "|r"
+  return C.ItemColor(id, link) .. C.ItemName(id, link) .. "|r"
 end
 
 ---A format string from the game ("%s receives loot: %s.") as a Lua pattern, and which capture holds which argument.
@@ -154,6 +164,7 @@ function C.Tick()
   local guild = C.guildRecord
   if guild and guild.sync then guild.sync:Tick() end
   if C.Roster then C.Roster:Tick() end
+  if C.LootMaster then C.LootMaster:Tick() end
 end
 
 -------------------------------------------------------------------------------------------
@@ -253,6 +264,8 @@ end
 local DEFAULTS = {
   autoOpen = true,    -- the window opens when the loot master opens loot worth rolling on
   announce = true,    -- starting a roll says so in raid chat
+  rollSeconds = 15,   -- how long a roll stays open
+  watchRolls = true,  -- show the roll popup when someone else is running the loot
 }
 
 Core:On("ADDON_LOADED", C, function(_, name)
@@ -300,12 +313,24 @@ SlashCmdList["COUNCIL"] = function(msg)
     C:Toggle()
   elseif lower == "settings" or lower == "options" then
     C:OpenSettings()
-  elseif lower == "loot" or lower == "reserves" or lower == "history" or lower == "players" or lower == "records" then
+  elseif lower == "loot" then
+    C.Popups:ShowList()
+  elseif lower == "tonight" or lower == "reserves" or lower == "history" or lower == "players" or lower == "records" then
     C.Window:Open(lower)
   elseif lower == "status" then
     C:PrintStatus()
+  elseif lower:match("^roll") then
+    -- an item from your bags: /council roll [link], or 2x[link] for two winners
+    local copies = tonumber((msg or ""):match("(%d+)x")) or 1
+    local link = (msg or ""):match("(|c.-|h|r)")
+    local id = link and tonumber(link:match("item:(%d+)"))
+    if id then
+      C.Popups:Roll(C.LootMaster:AddManual(id, link, copies))
+    else
+      C:Print("/council roll, then shift-click an item from your bags. 2x before it means two top rolls win.")
+    end
   else
-    C:Print("/council opens the window. Also: /council loot, reserves, history, players, records, settings, status")
+    C:Print("/council opens the window. Also: /council loot, roll [item], tonight, reserves, history, players, records, settings, status")
   end
 end
 
@@ -314,7 +339,8 @@ function C:PrintStatus()
   local rec = self:GuildRecord()
   self:Print(rec and ("Guild record: " .. #rec.ledger:Authors() .. " authors, digest " .. rec.ledger:Digest()) or "No guild record.")
   self:Print("You " .. (self.Roster:IsOfficer(self.Me()) and "count as an officer." or "don't count as an officer."))
-  self:Print("Sending: " .. tostring(self.SendBlocked() or "allowed") .. ". Waiting to send: " .. self.Transport:QueueSize())
+  self:Print("Sending: " .. tostring(self.SendBlocked() or "allowed") .. ". Last test: " .. tostring(self.Transport.lastResult) .. ". Waiting to send: " .. self.Transport:QueueSize())
+  self:Print("Announcing in chat: " .. tostring(self.db.chatWorks == nil and "not tried yet" or (self.db.chatWorks and "works" or "doesn't reach chat, so it opens the chat box for you")))
   self:Print("Loot lines this session: " .. tostring(self.Capture:SessionLineCount()) .. ". Lines the game kept secret: " .. tostring(self.Capture.secretLines))
   self:Print("Loot master: " .. tostring(self.LootMaster:MasterName()) .. ". Method: " .. tostring(self.LootMaster:MethodName()))
 end

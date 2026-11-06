@@ -209,7 +209,9 @@ function handlers.sr(state, e, allowed)
       rows[#rows + 1] = { p = row[1], i = row[2], plus = type(row[3]) == "number" and row[3] or nil, name = type(row[4]) == "string" and row[4] or nil }
     end
   end
-  state.reserves = { key = e.d.key, at = e.t, by = e.a, rows = rows, source = e.d.src, won = {} }
+  -- a corrected list mid-raid still remembers who's won tonight, or winning would earn them a step of SR+ at the close
+  local carried = state.reserves and state.reserves.won or {}
+  state.reserves = { key = e.d.key, at = e.t, by = e.a, rows = rows, source = e.d.src, won = carried }
   state.reserveLists[#state.reserveLists + 1] = state.reserves
   for _, row in ipairs(rows) do
     if state.rules.resetOnChange then

@@ -14,7 +14,7 @@ local W, H = 880, 600
 local ROW_H = 36
 
 local TABS = {
-  { key = "loot", label = "Loot night" }, { key = "reserves", label = "Reserves" }, { key = "history", label = "History" },
+  { key = "tonight", label = "Tonight" }, { key = "reserves", label = "Reserves" }, { key = "history", label = "History" },
   { key = "players", label = "Players" }, { key = "records", label = "Records" },
 }
 
@@ -57,11 +57,11 @@ local function createRow(row, content)
   row.right = UI.Text(content, "body", 13)
 end
 
-local function updateRow(row, item)
+local function updateRow(row, item, titleY)
   row.icon:SetShown(item.id ~= nil)
   if item.id then row.icon:SetTexture(C.In("C_Item", "GetItemIconByID", item.id) or 134400) end
   row.title:ClearAllPoints()
-  row.title:SetPoint("TOPLEFT", row, "TOPLEFT", item.id and 40 or 10, item.sub and -3 or -9)
+  row.title:SetPoint("TOPLEFT", row, "TOPLEFT", item.id and 40 or 10, item.sub and -3 or titleY)
   row.title:SetText(item.title or "")
   row.sub:SetText(item.sub or "")
   local previous
@@ -88,10 +88,12 @@ end
 
 ---A virtual list of these rows. Hovering one with an item shows the item's tooltip.
 function Window.RowList(parent, rowHeight)
+  local height = rowHeight or ROW_H
+  local titleY = -math.floor((height - 14) / 2)
   return UI.List(parent, {
-    rowHeight = rowHeight or ROW_H,
+    rowHeight = height,
     createRow = createRow,
-    updateRow = updateRow,
+    updateRow = function(row, item) updateRow(row, item, titleY) end,
     groupBand = true,
     onClick = function(item, _, button)
       if item.onClick then item.onClick(button) end
@@ -192,7 +194,7 @@ local function footerText()
   local rec = C:ShownRecord()
   if rec.personal then return "|cff8fe08f*|r Your own record: groups that aren't your guild's stay on this account." end
   local blocked = C.SendBlocked()
-  if blocked == "realm" then return "|cffe7b04f*|r This realm doesn't let add-ons send. Records has the paste-in way of staying in step." end
+  if blocked == "refused" then return "|cffe7b04f*|r The game is refusing add-on messages. Records has the paste-in way of staying in step." end
   local waiting = C.Transport:QueueSize()
   if blocked == "lockdown" then
     return string.format("|cffe7b04f*|r Sending paused until the game lifts its restriction. %d waiting, none lost.", waiting)
@@ -206,7 +208,8 @@ end
 
 local function fillPane()
   if not win then return end
-  local key = C.db.tab or "loot"
+  local key = C.db.tab or "tonight"
+  if not Window.panes[key] then key = "tonight" end
   for k, p in pairs(Window.panes) do
     if p.frame then p.frame:SetShown(k == key) end
   end
@@ -262,7 +265,7 @@ end
 function Window:Open(tab)
   if not self:Get() then return end
   if tab then C.db.tab = tab end
-  C.db.tab = C.db.tab or "loot"
+  C.db.tab = (C.db.tab and Window.panes[C.db.tab]) and C.db.tab or "tonight"
   win.tabs:Select(C.db.tab, true)
   win:Show()
   fillPane()

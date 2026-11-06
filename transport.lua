@@ -51,10 +51,31 @@ local function deliver(item)
   Transport:SendCommMessage(PREFIX, item.text, item.channel, item.target, item.priority)
 end
 
+local TEST_EVERY_REFUSED = 300    -- seconds, while the game is turning us down
+local nextTest = 0
+
+local function resultName(code)
+  local names = rawget(_G, "Enum") and Enum.SendAddonMessageResult
+  for name, value in pairs(names or {}) do
+    if value == code then return name end
+  end
+  return tostring(code)
+end
+
+---ChatThrottleLib hides what the game answers, so a small real message finds out whether sending works. Peers ignore it.
+function Transport:Test()
+  if not C.Global("IsInGuild") or C.In("C_ChatInfo", "InChatMessagingLockdown") then return end
+  local code = C.In("C_ChatInfo", "SendAddonMessage", PREFIX, "Ttest", "GUILD")
+  self.lastResult = code == nil and "no answer" or resultName(code)
+  local ok = code == nil or code == 0 or self.lastResult == "AddonMessageThrottle" or self.lastResult == "ChannelThrottle"
+  self.refused = not ok or nil
+  if self.refused then nextTest = C.Clock() + TEST_EVERY_REFUSED end
+end
+
 ---Sends a table. It waits if the game forbids sending for now. A volatile message is dropped instead: it'd be stale.
 function Transport:Send(msg, channel, target, priority, volatile)
   local blocked = C.SendBlocked()
-  if blocked == "realm" then return false end
+  if blocked == "refused" then return false end
   local item = { text = self.Encode(msg), channel = channel, target = target, priority = priority or "NORMAL" }
   if blocked then
     if volatile then return false end
@@ -69,6 +90,7 @@ end
 function Transport:QueueSize() return #self.queue end
 
 function Transport:Tick()
+  if self.refused and C.Clock() >= nextTest then self:Test() end
   if #self.queue > 0 and not C.SendBlocked() then
     local queue = self.queue
     self.queue = {}
@@ -94,6 +116,7 @@ function Transport:OnComm(prefix, text, channel, sender)
 end
 
 Transport:RegisterComm(PREFIX, "OnComm")
+Core:OnLogin(function() C.Later(8, function() Transport:Test() end) end)
 
 ---What sync.lua needs from the game.
 function Transport:SyncIO()
@@ -107,6 +130,6 @@ function Transport:SyncIO()
     isMember = function(name) return Roster:IsMember(name) end,
     onlineCount = function() return Roster:OnlineCount() end,
     send = function(msg, channel, target, priority) Transport:Send(msg, channel, target, priority) end,
-    canSend = function() return C.SendBlocked() ~= "realm" end,
+    canSend = function() return C.SendBlocked() ~= "refused" end,
   }
 end

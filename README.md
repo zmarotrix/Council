@@ -18,8 +18,9 @@ can look it up six months later.
 ## What it does
 
 ### Loot night
-Open a corpse, and each drop worth rolling on is listed with who's in line and why. Announce with a click, watch `/roll`s come in, see ties,
-and give the item with one more click. People without the add-on just `/roll` as usual.
+Open a corpse, and a small list beside the loot window shows each drop worth rolling on and who reserved it. Click one for the roll popup: announce with a
+click, watch `/roll`, `/roll 99` and `/roll 98` come in against a countdown, see ties, and give the item with a confirmation. Two identical items have two
+winners, and anything nobody wants can be raid-rolled. People without the add-on just `/roll` as usual.
 
 ### Reserves and SR+
 Paste a reserve list. Because NorgannonDB knows what drops where, Council catches a reserve that can't drop here, someone who isn't in the

@@ -6,12 +6,11 @@ Council = Council or {}
 local Ladder = {}
 Council.Ladder = Ladder
 
-Ladder.RUNGS = {
-  { key = "sr", title = "Reserved", note = "Only these players can win it" },
-  { key = "ms", title = "Main spec", note = "Anyone" },
-  { key = "os", title = "Off spec", note = "After main spec" },
-  { key = "de", title = "Disenchant or bank", note = "If nobody wants it" },
-}
+-- What a roll is for, from the range rolled: everyone rolls once, and main spec beats off spec beats transmog whatever the number.
+Ladder.KIND_BY_MAX = { [100] = "ms", [99] = "os", [98] = "tm" }
+Ladder.KIND_RANK = { sr = 0, ms = 0, raid = 0, os = 1, tm = 2 }
+Ladder.KIND_LABEL = { sr = "Reserved", ms = "Main spec", os = "Off spec", tm = "Transmog", raid = "Raid roll", hand = "Given by hand" }
+Ladder.KIND_TAG = { sr = "SR", ms = "MS", os = "OS", tm = "Tmog", raid = "Raid" }
 
 ---The reservers of an item in a list, with their SR+: { { p, plus, bonus } }, most SR+ first.
 function Ladder.Reservers(list, state, item)
@@ -31,56 +30,71 @@ function Ladder.Reservers(list, state, item)
   return out
 end
 
----The first rung that applies: Reserved if anyone reserved it, otherwise Main spec.
-function Ladder.StartRung(list, state, item)
-  return #Ladder.Reservers(list, state, item) > 0 and "sr" or "ms"
+---Is this drop reserved, for these purposes? Not if the loot master has opened it to everyone.
+function Ladder.IsReserved(list, state, item, everyone)
+  return not everyone and #Ladder.Reservers(list, state, item) > 0
 end
 
----Who can roll on a rung. Reserved: the reservers. Others: nil, meaning anyone.
-function Ladder.Eligible(rung, list, state, item)
-  if rung ~= "sr" then return nil end
-  local set = {}
-  for _, r in ipairs(Ladder.Reservers(list, state, item)) do set[r.p] = r end
-  return set
-end
-
----rolls = { [player] = roll }. Everyone in line, best total first; those yet to roll follow, by SR+.
----Returns rows { p, roll, plus, bonus, total }, and the players tied for first if there's a tie that matters.
-function Ladder.Rank(rung, list, state, item, rolls, tieRule)
-  local rows, seen = {}, {}
-  if rung == "sr" then
+---Everyone in line for a drop. rolls = { [player] = { v = roll, kind = "ms" } }. opts = { copies, tie, only = set, everyone }.
+---Returns rows (best first: { p, v, kind, plus, bonus, total }), winners (the top rows, nil while a tie stands in the way),
+---tied (the names tied across the last winning place, or nil), and waiting (reservers who haven't rolled).
+function Ladder.Rank(list, state, item, rolls, opts)
+  opts = opts or {}
+  local copies = opts.copies or 1
+  local reserved = Ladder.IsReserved(list, state, item, opts.everyone)
+  local rows, waiting = {}, {}
+  if reserved then
     for _, r in ipairs(Ladder.Reservers(list, state, item)) do
-      seen[r.p] = true
-      local roll = rolls[r.p]
-      rows[#rows + 1] = { p = r.p, plus = r.plus, bonus = r.bonus, roll = roll, total = roll and roll + r.bonus or nil }
+      if not opts.only or opts.only[r.p] then
+        local got = rolls[r.p]
+        if got then
+          rows[#rows + 1] = { p = r.p, v = got.v, kind = "sr", plus = r.plus, bonus = r.bonus, total = got.v + r.bonus }
+        else
+          waiting[#waiting + 1] = r
+        end
+      end
     end
   else
-    for p, roll in pairs(rolls) do
-      if not seen[p] then rows[#rows + 1] = { p = p, plus = 0, bonus = 0, roll = roll, total = roll } end
+    for p, got in pairs(rolls) do
+      if not opts.only or opts.only[p] then
+        rows[#rows + 1] = { p = p, v = got.v, kind = got.kind or "ms", plus = 0, bonus = 0, total = got.v }
+      end
     end
-  end
-  table.sort(rows, function(a, b)
-    if a.total and b.total then
-      if a.total ~= b.total then return a.total > b.total end
-      if a.plus ~= b.plus then return a.plus > b.plus end
-      return a.p < b.p
-    end
-    if a.total or b.total then return a.total ~= nil end
-    if a.plus ~= b.plus then return a.plus > b.plus end
-    return a.p < b.p
-  end)
-  local tied
-  local top = rows[1]
-  if top and top.total and rows[2] and rows[2].total == top.total then
-    -- under "oldest", more SR+ settles it; the same SR+ still needs a re-roll
-    if not (tieRule == "oldest" and top.plus ~= rows[2].plus) then
-      tied = {}
-      for _, row in ipairs(rows) do
-        if row.total == top.total and (tieRule ~= "oldest" or row.plus == top.plus) then tied[#tied + 1] = row.p end
+    if opts.only then
+      for p in pairs(opts.only) do
+        if not rolls[p] then waiting[#waiting + 1] = { p = p, plus = 0, bonus = 0 } end
       end
     end
   end
-  return rows, tied
+  local rank = Ladder.KIND_RANK
+  table.sort(rows, function(a, b)
+    if rank[a.kind] ~= rank[b.kind] then return rank[a.kind] < rank[b.kind] end
+    if a.total ~= b.total then return a.total > b.total end
+    if a.plus ~= b.plus then return a.plus > b.plus end
+    return a.p < b.p
+  end)
+  table.sort(waiting, function(a, b)
+    if a.plus ~= b.plus then return a.plus > b.plus end
+    return a.p < b.p
+  end)
+
+  -- a tie only matters if it crosses the last winning place
+  local last, nextUp = rows[copies], rows[copies + 1]
+  local tied
+  if last and nextUp and rank[last.kind] == rank[nextUp.kind] and last.total == nextUp.total then
+    if not (opts.tie == "oldest" and last.plus ~= nextUp.plus) then
+      tied = {}
+      for _, row in ipairs(rows) do
+        if rank[row.kind] == rank[last.kind] and row.total == last.total and (opts.tie ~= "oldest" or row.plus == last.plus) then tied[#tied + 1] = row.p end
+      end
+    end
+  end
+  local winners
+  if not tied then
+    winners = {}
+    for i = 1, math.min(copies, #rows) do winners[i] = rows[i] end
+  end
+  return rows, winners, tied, waiting
 end
 
 ---The one player a drop goes to without a roll: the only reserver. Otherwise nil.
@@ -90,12 +104,9 @@ function Ladder.OnlyReserver(list, state, item)
 end
 
 ---What gets written down about an award.
-function Ladder.Why(rung, roll, bonus, only)
+function Ladder.Why(kind, roll, bonus, only)
   if only then return "The only reserve" end
-  local title = "Given"
-  for _, r in ipairs(Ladder.RUNGS) do
-    if r.key == rung then title = r.title end
-  end
+  local title = Ladder.KIND_LABEL[kind] or "Given"
   if roll and bonus and bonus > 0 then return string.format("%s, rolled %d + %d SR+", title, roll, bonus) end
   if roll then return string.format("%s, rolled %d", title, roll) end
   return title

@@ -42,13 +42,9 @@ end
 Capture.ParseLoot = parseLoot
 
 local function worthRecording(rec, id, link)
-  local quality = C.In("C_Item", "GetItemQualityByID", id)
-  if type(quality) ~= "number" then
-    -- not cached yet: the link's colour says, and if it doesn't, keep it rather than lose it
-    local hex = type(link) == "string" and link:match("|c(%x%x%x%x%x%x%x%x)|H")
-    if hex == "ffffffff" or hex == "ff9d9d9d" then return false end
-    return true
-  end
+  -- the link says, on this client; if it doesn't and the item isn't cached, keep it rather than lose it
+  local quality = C.LinkQuality(link) or C.In("C_Item", "GetItemQualityByID", id)
+  if type(quality) ~= "number" then return true end
   return quality >= rec:State().rules.minQuality
 end
 

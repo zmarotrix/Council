@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0, 2026-11-06
+
+- **Loot runs from small popups now:** a loot list beside the game's loot window, a roll popup with a countdown, a
+  player list by class, and a confirmation before giving. The Loot night tab is now Tonight, a read-only list.
+- **One roll for everyone:** `/roll`, `/roll 99` and `/roll 98` for main spec, off spec and transmog, at once. It ends early when every reserver has rolled.
+- **New:** top rolls win for identical items, raid roll, Say what dropped, "Everyone may roll", and `/council roll [item]` for items in your bags.
+- **Fixed, found by /cprobe in a real dungeon:** names like "Arhara Dawnstrider" in loot lines didn't match "Arhara" on the roster, so reserves and witnesses couldn't line up.
+- **Fixed, found the same way:** the "add-on chat restricted" flag turned sync off, though add-on messages clearly still arrive. A real test message decides now.
+- **If an announcement never shows up in chat,** Council opens the chat box with it ready, so a press of Enter sends it.
+- **Fixed:** importing a corrected reserve list mid-raid forgot who'd won, so a winner would earn SR+ at the close.
+
 ## 0.1.0, 2026-11-06
 
 Stage 1, the loot night. Passes its harness. Not yet played in the game.

@@ -2,7 +2,7 @@
 ## Title: |cffc3e05aCouncil|r
 ## Notes: Your guild's loot and records: reserves and SR+, rolls, master loot, and a shared history of who got what in every raid and dungeon. Powered by NorgannonDB. /council
 ## Author: Maro
-## Version: 0.1.0
+## Version: 0.2.0
 ## X-License: All Rights Reserved
 ## Dependencies: NorgannonDB, NorgannonDB_Core
 ## SavedVariables: CouncilDB
@@ -23,7 +23,8 @@ transport.lua
 capture.lua
 lootmaster.lua
 window.lua
-pane_loot.lua
+popups.lua
+pane_tonight.lua
 pane_reserves.lua
 pane_history.lua
 pane_players.lua
