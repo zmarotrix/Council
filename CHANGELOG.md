@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3, 2026-11-06
+
+- **After the boss, it offers to switch back:** if Council switched you to master loot, then once a boss has died and everything's handed out, a small popup offers the method you had before. It only changes on a click.
+
 ## 0.2.2, 2026-11-06
 
 - **Buttons to pick a roll:** Main spec, Off spec and Transmog in the roll popup, or just Roll on a reserved item or a tie, for anyone who can roll on it.

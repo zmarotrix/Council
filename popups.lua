@@ -517,7 +517,10 @@ local function buildSwap()
   swap.text:SetPoint("TOPRIGHT", -12, -8)
   swap.text:SetJustifyH("CENTER")
   swap.text:SetWordWrap(true)
-  swap.yes = UI.Button(swap.body, "Switch", "primary", function() Popups:SwitchToMaster() end)
+  swap.yes = UI.Button(swap.body, "Switch", "primary", function()
+    swap:Hide()
+    if swap.onYes then swap.onYes() end
+  end)
   swap.yes:SetSize(90, 24)
   swap.yes:SetPoint("BOTTOMRIGHT", swap.body, "BOTTOM", -4, 10)
   swap.no = UI.Button(swap.body, "Not now", "quiet", function() swap:Hide() end)
@@ -526,16 +529,58 @@ local function buildSwap()
   place(swap, 560, -90)
 end
 
----The click: makes you the master looter, and says if the game didn't take it.
+local function ask(text, onYes)
+  if not swap then buildSwap() end
+  swap.text:SetText(text)
+  swap.onYes = onYes
+  swap:Show()
+end
+
+---The click: makes you the master looter, remembers what it was, and says if the game didn't take it.
 function Popups:SwitchToMaster()
-  if swap then swap:Hide() end
   local enum = rawget(_G, "Enum") and Enum.LootMethod
   local me = C.Me()
   if not (enum and me) then return end
+  local before = C.In("C_PartyInfo", "GetLootMethod")
   C.In("C_PartyInfo", "SetLootMethod", enum.Masterlooter, me)
+  C.db.lootBefore = { method = before, at = C.Clock(), asked = false }
   C.Later(SWITCH_CHECK, function()
-    if not LM:IsMasterLoot() then C:Print("The game didn't switch to master loot. You can change it from your portrait's menu.") end
+    if not LM:IsMasterLoot() then
+      C.db.lootBefore = nil
+      C:Print("The game didn't switch to master loot. You can change it from your portrait's menu.")
+    end
   end)
+end
+
+local METHOD_NAMES = { Freeforall = "free for all", Roundrobin = "round robin", Group = "group loot", Needbeforegreed = "need before greed", Personal = "personal loot" }
+
+local function methodName(method)
+  for name, value in pairs(rawget(_G, "Enum") and Enum.LootMethod or {}) do
+    if value == method then return METHOD_NAMES[name] or name end
+  end
+  return "the old loot method"
+end
+
+---The click: back to what it was before Council switched it.
+function Popups:SwitchBack()
+  local before = C.db.lootBefore
+  C.db.lootBefore = nil
+  if not before then return end
+  C.In("C_PartyInfo", "SetLootMethod", before.method)
+  C.Later(SWITCH_CHECK, function()
+    if LM:IsMasterLoot() then C:Print("The game didn't switch back. You can change it from your portrait's menu.") end
+  end)
+end
+
+---Once Council has switched to master loot, a boss has died since, and nothing's left to hand out, it offers to switch back. Once.
+function Popups:CheckSwitchBack()
+  local before = C.db and C.db.lootBefore
+  if not before or before.asked or not LM:IsMasterLoot() or not LM:IsMaster() then return false end
+  if not C.Global("UnitIsGroupLeader", "player") or C.Global("InCombatLockdown") then return false end
+  if LM:Left() > 0 or C.Capture.bossAt <= before.at then return false end
+  before.asked = true
+  ask(string.format("Everything's handed out. Switch back to %s?", methodName(before.method)), function() Popups:SwitchBack() end)
+  return true
 end
 
 ---Asks about this target, if there's reason to and it hasn't asked about this boss here already.
@@ -544,9 +589,7 @@ function Popups:CheckTarget()
   local npcId = targetBoss()
   if not npcId or asked[npcId] then return false end
   asked[npcId] = true
-  if not swap then buildSwap() end
-  swap.text:SetText(string.format("%s: switch to master loot, with you as looter?", C.Global("UnitName", "target") or "This boss"))
-  swap:Show()
+  ask(string.format("%s: switch to master loot, with you as looter?", C.Global("UnitName", "target") or "This boss"), function() Popups:SwitchToMaster() end)
   return true
 end
 
@@ -554,7 +597,17 @@ Core:On("PLAYER_TARGET_CHANGED", "council.popups", function() Popups:CheckTarget
 -- answering "not now" holds until the next instance; the question also goes if the method changes some other way, or a fight starts
 Core:On("PLAYER_ENTERING_WORLD", "council.popups", function() asked = {} end)
 Core:On("PARTY_LOOT_METHOD_CHANGED", "council.popups", function()
-  if swap and LM:IsMasterLoot() then swap:Hide() end
+  if LM:IsMasterLoot() then
+    if swap and not (C.db.lootBefore and C.db.lootBefore.asked) then swap:Hide() end
+  else
+    -- it's off master loot, whoever did that, so there's nothing to go back from
+    C.db.lootBefore = nil
+    if swap then swap:Hide() end
+  end
+end)
+Core:On("LOOT_CLOSED", "council.popups", function() Popups:CheckSwitchBack() end)
+Core:On("GROUP_LEFT", "council.popups", function()
+  if C.db then C.db.lootBefore = nil end
 end)
 Core:On("PLAYER_REGEN_DISABLED", "council.popups", function()
   if swap then swap:Hide() end
