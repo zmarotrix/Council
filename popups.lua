@@ -19,8 +19,10 @@ local LIST_W, LIST_ROW, LIST_MAX_ROWS, LIST_BAR = 330, 30, 12, 34
 local ROLL_W, ROLL_ROW, ROLL_MAX_ROWS, ROLL_TOP, ROLL_MID, ROLL_BAR = 410, 26, 9, 46, 40, 36
 local PICK_W, PICK_H, PICK_ROW = 240, 440, 22
 local CONFIRM_W, CONFIRM_H = 360, 150
-local WINNER_ROW_W = 96
+local ICON_SIZE, ICON_GAP, HEAD_MARGIN = 34, 9, 12
 local MAX_BUTTONS = 5
+local MAX_ROLL_BUTTONS, ROLL_PICK = 3, 30
+local NO_BAR = 6
 
 local list, roll, pick, confirm
 
@@ -116,29 +118,22 @@ local function buildRoll()
   roll:Hide()
   if roll.powered then roll.powered:Hide() end
   roll.icon = roll.body:CreateTexture(nil, "ARTWORK")
-  roll.icon:SetSize(34, 34)
+  roll.icon:SetSize(ICON_SIZE, ICON_SIZE)
   roll.icon:SetPoint("TOPLEFT", 12, -8)
   roll.icon:SetTexCoord(.07, .93, .07, .93)
   roll.item = UI.Text(roll.body, "body", 15)
-  roll.item:SetPoint("TOPLEFT", roll.icon, "TOPRIGHT", 9, -1)
-  roll.item:SetPoint("TOPRIGHT", roll.body, "TOPRIGHT", -10, -9)
-  roll.item:SetJustifyH("LEFT")
+  roll.item:SetPoint("TOPLEFT", roll.icon, "TOPRIGHT", ICON_GAP, -1)
+  roll.item:SetJustifyH("CENTER")
   roll.item:SetWordWrap(false)
   roll.note = UI.Text(roll.body, "body", 12, Colors.muted)
-  roll.note:SetPoint("TOPLEFT", roll.item, "BOTTOMLEFT", 0, -2)
-  roll.note:SetPoint("TOPRIGHT", roll.item, "BOTTOMRIGHT", 0, -2)
-  roll.note:SetJustifyH("LEFT")
+  roll.note:SetPoint("TOP", roll.item, "BOTTOM", 0, -2)
+  roll.note:SetJustifyH("CENTER")
   roll.note:SetWordWrap(false)
   roll.rows = Window.RowList(roll.body, ROLL_ROW)
-  roll.rows:SetPoint("TOPLEFT", 8, -ROLL_TOP - 4)
-  roll.rows:SetPoint("BOTTOMRIGHT", -8, ROLL_MID + ROLL_BAR)
   roll.bar = roll.body:CreateTexture(nil, "ARTWORK")
   roll.bar:SetColorTexture(UI.Accent("council")[1], UI.Accent("council")[2], UI.Accent("council")[3], 1)
   roll.bar:SetHeight(3)
-  roll.bar:SetPoint("BOTTOMLEFT", roll.body, "BOTTOMLEFT", 14, ROLL_MID + ROLL_BAR - 3)
   roll.mid = UI.Text(roll.body, "body", 13, Colors.muted)
-  roll.mid:SetPoint("BOTTOMLEFT", 12, ROLL_BAR + 2)
-  roll.mid:SetPoint("BOTTOMRIGHT", -12, ROLL_BAR + 2)
   roll.mid:SetHeight(ROLL_MID - 6)
   roll.mid:SetJustifyH("CENTER")
   roll.mid:SetWordWrap(true)
@@ -150,12 +145,35 @@ local function buildRoll()
     b:SetHeight(24)
     roll.buttons[i] = b
   end
+  roll.picks = {}
+  for i = 1, MAX_ROLL_BUTTONS do
+    local b = UI.Button(roll.body, "", "accent", function(self)
+      if self.run then self.run() end
+    end)
+    b:SetHeight(24)
+    roll.picks[i] = b
+  end
   place(roll, 400, -170)
 end
 
-local function setButtons(specs)
+local function textWidth(text)
+  return (text.GetUnboundedStringWidth and text:GetUnboundedStringWidth()) or text:GetStringWidth() or 0
+end
+
+-- The icon and the two lines of text sit in the middle as one group, however long the item's name is.
+local function centreHeading()
+  local room = ROLL_W - 2 * HEAD_MARGIN - ICON_SIZE - ICON_GAP
+  local width = math.min(room, math.ceil(math.max(textWidth(roll.item), textWidth(roll.note))))
+  roll.item:SetWidth(width)
+  roll.note:SetWidth(width)
+  roll.icon:ClearAllPoints()
+  roll.icon:SetPoint("TOPLEFT", roll.body, "TOPLEFT", math.floor((ROLL_W - ICON_SIZE - ICON_GAP - width) / 2), -8)
+end
+
+-- A row of buttons, centred, this far from the bottom.
+local function setButtons(pool, specs, y)
   local total, previous = 0, nil
-  for i, b in ipairs(roll.buttons) do
+  for i, b in ipairs(pool) do
     local spec = specs[i]
     b:SetShown(spec ~= nil)
     if spec then
@@ -165,13 +183,27 @@ local function setButtons(specs)
     end
   end
   local x = math.floor(math.max(8, (ROLL_W - total) / 2))
-  for i, b in ipairs(roll.buttons) do
+  for i, b in ipairs(pool) do
     if specs[i] then
       b:ClearAllPoints()
-      if previous then b:SetPoint("LEFT", previous, "RIGHT", 4, 0) else b:SetPoint("BOTTOMLEFT", roll.body, "BOTTOMLEFT", x, 8) end
+      if previous then b:SetPoint("LEFT", previous, "RIGHT", 4, 0) else b:SetPoint("BOTTOMLEFT", roll.body, "BOTTOMLEFT", x, y) end
       previous = b
     end
   end
+end
+
+-- From the bottom up: the loot master's buttons, the line of text, the buttons to pick a roll, then the rows.
+local function layoutRoll(bottom, picking)
+  roll.mid:ClearAllPoints()
+  roll.mid:SetPoint("BOTTOMLEFT", 12, bottom + 2)
+  roll.mid:SetPoint("BOTTOMRIGHT", -12, bottom + 2)
+  local above = bottom + ROLL_MID + (picking and ROLL_PICK or 0)
+  roll.bar:ClearAllPoints()
+  roll.bar:SetPoint("BOTTOMLEFT", roll.body, "BOTTOMLEFT", 14, above - 3)
+  roll.rows:ClearAllPoints()
+  roll.rows:SetPoint("TOPLEFT", 8, -ROLL_TOP - 4)
+  roll.rows:SetPoint("BOTTOMRIGHT", -8, above)
+  return above
 end
 
 local function currentDrop()
@@ -280,6 +312,7 @@ local function fillRoll()
   else
     roll.note:SetText("/roll for main spec, /roll 99 for off spec, /roll 98 for transmog")
   end
+  centreHeading()
 
   local rows, winners, tied, waiting = LM:Rank(drop)
   local items = {}
@@ -311,8 +344,18 @@ local function fillRoll()
   if rolling then
     roll.bar:SetWidth(math.max(1, (ROLL_W - 28) * LM.SecondsLeft(drop) / math.max(1, C.db.rollSeconds)))
   end
-  setButtons(buttonsFor(drop, master, winners, tied, waiting, reservers))
-  roll:SetHeight(HEADER_H + ROLL_TOP + 8 + math.min(math.max(#items, 1), ROLL_MAX_ROWS) * ROLL_ROW + ROLL_MID + (master and ROLL_BAR or 6))
+  local bottom = master and ROLL_BAR or NO_BAR
+  local mine = {}
+  for i, choice in ipairs(LM:MyRolls(drop)) do
+    mine[i] = { text = choice.text, run = function()
+      LM:RollFor(drop, choice.max)
+      Popups:Refresh()
+    end }
+  end
+  local above = layoutRoll(bottom, #mine > 0)
+  setButtons(roll.buttons, buttonsFor(drop, master, winners, tied, waiting, reservers), 8)
+  setButtons(roll.picks, mine, bottom + ROLL_MID)
+  roll:SetHeight(HEADER_H + ROLL_TOP + 8 + math.min(math.max(#items, 1), ROLL_MAX_ROWS) * ROLL_ROW + above)
 end
 
 ---Opens the roll popup on a drop.
@@ -328,8 +371,10 @@ end
 function Popups:Watch(key)
   if not C.db.watchRolls or LM:IsMaster() then return end
   local drop = LM:Find(key)
-  if not drop or self.watched == key then return end
-  self.watched = key
+  if not drop or drop.state ~= "rolling" then return end
+  local tag = key .. (drop.only and "|tie" or "")   -- a tie is a new roll, so a popup closed earlier comes back for it
+  if self.watched == tag then return end
+  self.watched = tag
   self:Roll(drop)
 end
 
@@ -418,3 +463,99 @@ function Popups:Refresh()
   fillList()
   fillRoll()
 end
+
+-------------------------------------------------------------------------------------------
+-- Targeting a boss: a small question about master loot. SetLootMethod is flagged as restricted, so a person clicks Yes:
+-- nothing here changes the loot rules by itself. A raid always gets asked; a party only when a reserve list is loaded, or every
+-- dungeon boss would ask for no reason.
+-------------------------------------------------------------------------------------------
+
+local SWITCH_W, SWITCH_H = 340, 130
+local SWITCH_CHECK = 2
+
+local swap
+local asked = {}
+local bossIds
+
+-- Every boss NorgannonDB knows, built once, the first time it's needed.
+local function knownBoss(npcId)
+  if not bossIds then
+    bossIds = {}
+    for _, key in ipairs(Core.DB:InstanceKeys()) do
+      local record = Core.DB:Instance(key)
+      for _, boss in ipairs(record and record.bosses or {}) do
+        if boss.id then bossIds[boss.id] = true end
+      end
+    end
+  end
+  return bossIds[npcId] == true
+end
+
+---The target's NPC id if it's a boss, or nil. A secret answer counts as no.
+local function targetBoss()
+  local guid = C.Global("UnitGUID", "target")
+  local npcId = type(guid) == "string" and tonumber(guid:match("^Creature%-%d+%-%d+%-%d+%-%d+%-(%d+)"))
+  if not npcId or C.Global("UnitIsDead", "target") then return nil end
+  if C.Global("UnitClassification", "target") == "worldboss" or knownBoss(npcId) then return npcId end
+end
+
+local function worthAsking()
+  if not C.db or not C.db.askMasterLoot then return false end
+  if not C.Global("IsInGroup") or not C.Global("UnitIsGroupLeader", "player") then return false end
+  if C.Global("InCombatLockdown") or LM:IsMasterLoot() then return false end
+  if C.Global("IsInRaid") then return true end
+  return C:RecordForGroup():State().reserves ~= nil
+end
+
+local function buildSwap()
+  swap = UI.Window({ name = "CouncilSwitchLoot", addon = "council", title = "Master loot", width = SWITCH_W, height = SWITCH_H })
+  swap:SetAccent("council")
+  swap:Hide()
+  if swap.powered then swap.powered:Hide() end
+  swap.text = UI.Text(swap.body, "body", 14)
+  swap.text:SetPoint("TOPLEFT", 12, -8)
+  swap.text:SetPoint("TOPRIGHT", -12, -8)
+  swap.text:SetJustifyH("CENTER")
+  swap.text:SetWordWrap(true)
+  swap.yes = UI.Button(swap.body, "Switch", "primary", function() Popups:SwitchToMaster() end)
+  swap.yes:SetSize(90, 24)
+  swap.yes:SetPoint("BOTTOMRIGHT", swap.body, "BOTTOM", -4, 10)
+  swap.no = UI.Button(swap.body, "Not now", "quiet", function() swap:Hide() end)
+  swap.no:SetSize(90, 24)
+  swap.no:SetPoint("BOTTOMLEFT", swap.body, "BOTTOM", 4, 10)
+  place(swap, 560, -90)
+end
+
+---The click: makes you the master looter, and says if the game didn't take it.
+function Popups:SwitchToMaster()
+  if swap then swap:Hide() end
+  local enum = rawget(_G, "Enum") and Enum.LootMethod
+  local me = C.Me()
+  if not (enum and me) then return end
+  C.In("C_PartyInfo", "SetLootMethod", enum.Masterlooter, me)
+  C.Later(SWITCH_CHECK, function()
+    if not LM:IsMasterLoot() then C:Print("The game didn't switch to master loot. You can change it from your portrait's menu.") end
+  end)
+end
+
+---Asks about this target, if there's reason to and it hasn't asked about this boss here already.
+function Popups:CheckTarget()
+  if not worthAsking() then return false end
+  local npcId = targetBoss()
+  if not npcId or asked[npcId] then return false end
+  asked[npcId] = true
+  if not swap then buildSwap() end
+  swap.text:SetText(string.format("%s: switch to master loot, with you as looter?", C.Global("UnitName", "target") or "This boss"))
+  swap:Show()
+  return true
+end
+
+Core:On("PLAYER_TARGET_CHANGED", "council.popups", function() Popups:CheckTarget() end)
+-- answering "not now" holds until the next instance; the question also goes if the method changes some other way, or a fight starts
+Core:On("PLAYER_ENTERING_WORLD", "council.popups", function() asked = {} end)
+Core:On("PARTY_LOOT_METHOD_CHANGED", "council.popups", function()
+  if swap and LM:IsMasterLoot() then swap:Hide() end
+end)
+Core:On("PLAYER_REGEN_DISABLED", "council.popups", function()
+  if swap then swap:Hide() end
+end)

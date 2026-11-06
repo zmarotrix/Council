@@ -20,6 +20,7 @@ local BROADCAST_GAP = 1
 local KEEP_HOURS = 8
 local MAX_CANDIDATES = 40
 local ECHO_WAIT = 3
+local CLICK_HOLD = 3     -- seconds a roll button stays away after a click, while the roll comes back
 local MAX_CHAT = 250
 
 local function changed()
@@ -325,7 +326,7 @@ end
 function LM:Start(drop, everyone)
   local rec = record()
   local state, list = rec:State(), listOf(rec)
-  drop.state, drop.rolls, drop.ignored, drop.only, drop.locked, drop.raided = "rolling", {}, nil, nil, nil, nil
+  drop.state, drop.rolls, drop.ignored, drop.only, drop.onlyKind, drop.locked, drop.raided = "rolling", {}, nil, nil, nil, nil, nil
   drop.everyone = everyone or nil
   drop.endsAt = C.Clock() + C.db.rollSeconds
   self.activeKey = drop.key
@@ -344,6 +345,32 @@ function LM:Start(drop, everyone)
   self:Save()
   self:Broadcast()
   changed()
+end
+
+---Which rolls this player can make right now, as buttons: { { text, max } }. Empty once they've rolled, or if it isn't for them.
+function LM:MyRolls(drop)
+  local me = C.Me()
+  if drop.state ~= "rolling" or not me or (drop.rolls or {})[me] then return {} end
+  local clicked = self.clicked and self.clicked[drop.key]
+  if clicked and C.Clock() - clicked < CLICK_HOLD then return {} end
+  if drop.only then
+    return drop.only[me] and { { text = "Roll", max = 100 } } or {}
+  end
+  local rec = record()
+  if isReserved(drop, rec) then
+    for _, r in ipairs(Ladder.Reservers(listOf(rec), rec:State(), drop.id)) do
+      if r.p == me then return { { text = "Roll", max = 100 } } end
+    end
+    return {}
+  end
+  return { { text = "Main spec", max = 100 }, { text = "Off spec", max = 99 }, { text = "Transmog", max = 98 } }
+end
+
+---Makes the roll, a real one that everyone sees, the same as typing it.
+function LM:RollFor(drop, max)
+  self.clicked = self.clicked or {}
+  self.clicked[drop.key] = C.Clock()
+  pcall(RandomRoll, 1, max)
 end
 
 ---Ends the roll. From a click it says who's on top; a timer running out stays in the popup.
@@ -366,7 +393,7 @@ function LM:Finish(drop, fromClick)
 end
 
 function LM:Cancel(drop)
-  drop.state, drop.rolls, drop.only, drop.locked, drop.endsAt, drop.ignored, drop.raided, drop.everyone = nil, {}, nil, nil, nil, nil, nil, nil
+  drop.state, drop.rolls, drop.only, drop.onlyKind, drop.locked, drop.endsAt, drop.ignored, drop.raided, drop.everyone = nil, {}, nil, nil, nil, nil, nil, nil, nil
   if self.activeKey == drop.key then self.activeKey = nil end
   self:Say(string.format("Rolling for %s is off.", linkOrName(drop)))
   self:Save()
@@ -379,9 +406,12 @@ function LM:Reroll(drop, tied)
   local rows = self:Rank(drop)
   local isTied = {}
   drop.only = {}
+  -- a tie at off spec stays off spec, whatever range the re-roll uses
+  drop.onlyKind = {}
   for _, name in ipairs(tied) do
     isTied[name] = true
     drop.only[name] = true
+    drop.onlyKind[name] = drop.rolls[name] and drop.rolls[name].kind
     drop.rolls[name] = nil
   end
   drop.locked = drop.locked or {}
@@ -404,7 +434,7 @@ function LM:RaidRoll(drop)
   if #names == 0 then return false end
   local parts = {}
   for i, name in ipairs(names) do parts[i] = string.format("[%d]%s", i, name) end
-  drop.state, drop.rolls, drop.only, drop.locked, drop.ignored, drop.endsAt, drop.everyone = "raid", {}, nil, nil, nil, nil, nil
+  drop.state, drop.rolls, drop.only, drop.onlyKind, drop.locked, drop.ignored, drop.endsAt, drop.everyone = "raid", {}, nil, nil, nil, nil, nil, nil
   drop.raidNames = names
   self.activeKey = drop.key
   self:Say(string.format("Raid rolling %s: %s", linkOrName(drop), table.concat(parts, ", ")))
@@ -472,7 +502,7 @@ local function onSystem(text)
     if not isReserver or high ~= 100 then counts = false end
   end
   if counts then
-    drop.rolls[name] = { v = roll, kind = kind }
+    drop.rolls[name] = { v = roll, kind = (drop.onlyKind and drop.onlyKind[name]) or kind }
   else
     drop.ignored = drop.ignored or {}
     drop.ignored[name] = roll

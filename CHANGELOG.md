@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.2, 2026-11-06
+
+- **Buttons to pick a roll:** Main spec, Off spec and Transmog in the roll popup, or just Roll on a reserved item or a tie, for anyone who can roll on it.
+  They make a real `/roll`, so people without the add-on see nothing different.
+- **Targeting a boss asks about master loot:** a small popup if you're leading a raid, or a party with a reserve list, and it isn't on. It only ever switches when you click.
+- Settings for that question, for showing others' rolls, and for how long a roll lasts.
+- The roll popup's item and text are centred.
+- Fixed: the read-only roll popup clipped its last row.
+- Fixed: a tie at off spec could become main spec, if the re-roll used `/roll`.
+
 ## 0.2.0, 2026-11-06
 
 - **Loot runs from small popups now:** a loot list beside the game's loot window, a roll popup with a countdown, a

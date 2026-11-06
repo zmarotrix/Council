@@ -266,6 +266,7 @@ local DEFAULTS = {
   announce = true,    -- starting a roll says so in raid chat
   rollSeconds = 15,   -- how long a roll stays open
   watchRolls = true,  -- show the roll popup when someone else is running the loot
+  askMasterLoot = true, -- targeting a boss as leader asks about switching to master loot
 }
 
 Core:On("ADDON_LOADED", C, function(_, name)
