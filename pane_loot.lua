@@ -31,12 +31,12 @@ local function build(f)
 
   f.title = UI.Text(f, "title", 16, Colors.gold)
   f.title:SetPoint("TOPLEFT", f.left, "TOPRIGHT", 12, -2)
-  f.title:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+  f.title:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -2)
   f.title:SetJustifyH("LEFT")
   f.title:SetWordWrap(false)
   f.lead = Window.Line(f)
   f.lead:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -3)
-  f.lead:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+  f.lead:SetPoint("TOPRIGHT", f.title, "BOTTOMRIGHT", 0, -3)
 
   f.bar = CreateFrame("Frame", nil, f)
   f.bar:SetPoint("BOTTOMLEFT", f.left, "BOTTOMRIGHT", 12, 0)
@@ -60,7 +60,7 @@ local function build(f)
 
   f.empty = Window.Line(f, 14)
   f.empty:SetPoint("TOPLEFT", f.left, "TOPRIGHT", 12, -2)
-  f.empty:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+  f.empty:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -2)
 end
 
 local function setButtons(f, specs)

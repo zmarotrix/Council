@@ -114,7 +114,7 @@ end
 local function build(f)
   f.left = UI.Pane(f)
   f.left:SetPoint("TOPLEFT")
-  f.left:SetPoint("BOTTOM")
+  f.left:SetPoint("BOTTOMLEFT")
   f.left:SetWidth(410)
   f.leftList = Window.RowList(f.left, 34)
   f.leftList:SetPoint("TOPLEFT", 2, -2)
