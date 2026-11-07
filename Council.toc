@@ -1,5 +1,6 @@
 ## Interface: 16001
 ## Title: |cffc3e05aCouncil|r
+## Category: NorgannonDB
 ## Notes: Your guild's loot and records: reserves and SR+, rolls, master loot, and a shared history of who got what in every raid and dungeon. Powered by NorgannonDB. /council
 ## Author: Maro
 ## Version: 0.2.4
