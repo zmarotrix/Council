@@ -58,6 +58,7 @@ function C.Clock() return GetTime() end
 ---A player's name as records hold it: bare on our own realm, with the realm otherwise. nil for a secret name.
 ---Forever's loot lines and C_LootHistory say "Arhara Dawnstrider" where the roster and UnitName say "Arhara" (seen in
 ---/cprobe's results), so anything after a space is dropped, or nobody's reserve would match their loot.
+---This is who someone is in the records, not an address: a whisper to it fails, so Transport keeps the full name for those.
 function C.Short(name)
   if type(name) ~= "string" or Core.IsSecret(name) or name == "" then return nil end
   name = name:match("^%S+") or name

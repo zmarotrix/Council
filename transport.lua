@@ -16,6 +16,11 @@ local MAX_INCOMING = 120000      -- bytes of text we'll even try to read
 local COMPRESS_FROM = 120
 local CHANNELS = { GUILD = true, OFFICER = true, RAID = true, PARTY = true, WHISPER = true, INSTANCE_CHAT = true }
 
+-- Records call people by first name (see C.Short), but the game can't deliver a whisper to one: Forever's players have
+-- surnames too, and whispering "Tyrant" gets "No player named 'Tyrant'" in chat. So a reply goes to the sender's name
+-- exactly as the game gave it to us.
+local addresses = {}             -- first name -> their name as the game wrote it
+
 local AceComm = LibStub("AceComm-3.0")
 AceComm:Embed(Transport)
 
@@ -76,7 +81,8 @@ end
 function Transport:Send(msg, channel, target, priority, volatile)
   local blocked = C.SendBlocked()
   if blocked == "refused" then return false end
-  local item = { text = self.Encode(msg), channel = channel, target = target, priority = priority or "NORMAL" }
+  if channel == "WHISPER" then target = addresses[target] or target end
+  local item ={ text = self.Encode(msg), channel = channel, target = target, priority = priority or "NORMAL" }
   if blocked then
     if volatile then return false end
     if #self.queue >= MAX_QUEUE then table.remove(self.queue, 1) end
@@ -104,6 +110,7 @@ function Transport:OnComm(prefix, text, channel, sender)
   if not CHANNELS[channel] then return end
   local name = C.Short(sender)
   if not name or name == C.Me() then return end
+  addresses[name] = sender
   local msg = self.Decode(text)
   if type(msg) ~= "table" then return end
   if msg.m == "L" then
@@ -128,6 +135,7 @@ function Transport:SyncIO()
     isOfficer = function(name) return Roster:IsOfficer(name) end,
     -- until the roster has loaded, nobody can be checked, and a message can wait for the next summary
     isMember = function(name) return Roster:IsMember(name) end,
+    isOnline = function(name) return Roster:IsOnline(name) end,
     onlineCount = function() return Roster:OnlineCount() end,
     send = function(msg, channel, target, priority) Transport:Send(msg, channel, target, priority) end,
     canSend = function() return C.SendBlocked() ~= "refused" end,

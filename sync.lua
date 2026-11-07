@@ -8,7 +8,7 @@
 --   P  need      "send me these authors, from these numbers", whispered. One batch per ask, so the asker sets the pace.
 --   E  entries   entries, live on GUILD or in answer to P.
 --
--- io = { me, now(), send(msg, channel, target, priority), isOfficer(name), isMember(name), random(a, b), canSend(), onlineCount() }
+-- io = { me, now(), send(msg, channel, target, priority), isOfficer(name), isMember(name), isOnline(name), random(a, b), canSend(), onlineCount() }
 
 Council = Council or {}
 local Sync = {}
@@ -35,8 +35,17 @@ function Sync:Start()
   self.nextSummary = self.io.now() + self.io.random(Sync.LOGIN_MIN, Sync.LOGIN_MAX)
 end
 
+function Sync:Reachable(name)
+  return not self.io.isOnline or self.io.isOnline(name)
+end
+
 function Sync:Send(msg, channel, target, priority)
   if self.io.canSend and not self.io.canSend() then return false end
+  -- whispering someone who's logged off only prints "No player named" in the chat of whoever's playing
+  if channel == "WHISPER" and not self:Reachable(target) then
+    self.peers[target] = nil
+    return false
+  end
   self.io.send(msg, channel, target, priority or "NORMAL")
   return true
 end
@@ -93,7 +102,7 @@ function Sync:NextPeer()
   local pull = self.pull
   if not pull then return end
   for peer in pairs(self.peers) do
-    if peer ~= pull.peer and not pull.tried[peer] then
+    if peer ~= pull.peer and not pull.tried[peer] and self:Reachable(peer) then
       pull.peer = peer
       pull.tried[peer] = true
       self:AskPull()
@@ -130,8 +139,7 @@ end
 function Sync:Ask(peer)
   local now = self.io.now()
   if now - self.lastAsk < Sync.ASK_GAP then return end
-  self.lastAsk = now
-  self:Send({ m = "Q" }, "WHISPER", peer, "BULK")
+  if self:Send({ m = "Q" }, "WHISPER", peer, "BULK") then self.lastAsk = now end
 end
 
 local handlers = {}

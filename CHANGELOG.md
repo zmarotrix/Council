@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4, 2026-11-06
+
+- **Fixed: "No player named 'Tyrant'" in chat.** Sync whispered people by first name only, which the game can't deliver, so catching up from another
+  member failed too. It now uses the full name the game gave it, and doesn't whisper anyone the roster shows as offline.
+
 ## 0.2.3, 2026-11-06
 
 - **After the boss, it offers to switch back:** if Council switched you to master loot, then once a boss has died and everything's handed out, a small popup offers the method you had before. It only changes on a click.
