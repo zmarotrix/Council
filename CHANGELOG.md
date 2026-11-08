@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1, 2026-11-07
+
+- Add-on messages now go through NorgannonDB Core 1.21's `Core.Net`, which holds Council's own transport code. Nothing
+  changes in game: the same prefix and messages, held through lockdown, and whispers to full names.
+
 ## 0.3.0, 2026-11-07
 
 - Built on NorgannonDB Core 1.20: `Core:NewAddon` for the setup, Core's guild roster (read once for the whole suite
