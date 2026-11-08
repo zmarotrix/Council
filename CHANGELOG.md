@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0, 2026-11-07
+
+- Built on NorgannonDB Core 1.20: `Core:NewAddon` for the setup, Core's guild roster (read once for the whole suite
+  instead of by Council too), `Core.Names` for first names, and Core's row list. Same commands, tabs and records;
+  `/council help` now lists every command.
+- A whisper to someone Council has only heard of by first name can now use the full name chat has shown.
+- The "Show the minimap button" setting is gone: NorgannonDB > Minimap pins any add-on.
+- Settings asked for in combat open when the fight ends.
+
 ## 0.2.4, 2026-11-06
 
 - **Fixed: "No player named 'Tyrant'" in chat.** Sync whispered people by first name only, which the game can't deliver, so catching up from another

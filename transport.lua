@@ -81,7 +81,7 @@ end
 function Transport:Send(msg, channel, target, priority, volatile)
   local blocked = C.SendBlocked()
   if blocked == "refused" then return false end
-  if channel == "WHISPER" then target = addresses[target] or target end
+  if channel == "WHISPER" then target = addresses[target] or Core.Names:Address(target) or target end
   local item ={ text = self.Encode(msg), channel = channel, target = target, priority = priority or "NORMAL" }
   if blocked then
     if volatile then return false end

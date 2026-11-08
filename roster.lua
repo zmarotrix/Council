@@ -1,6 +1,6 @@
 -- Who's who: the guild roster and the current group. Rank is the trust boundary (docs/council-v1.md section 4), and the
--- game vouches for it. GetGuildRosterInfo is undocumented, so its fields are from memory until /cprobe confirms the
--- shape. Rows with a secret name are skipped, and a roster read in lockdown just waits for the next one.
+-- game vouches for it. The roster itself is Core.Guild's, read once for the whole suite (rows with a secret name are
+-- skipped there); this keeps what Council adds: who counts as an officer, and a revision that moves only with ranks.
 
 local Core = NorgannonCore
 local C = Council
@@ -9,11 +9,9 @@ if C.disabled then return end
 local Roster = { revision = 0, byName = {}, count = 0, classOf = {} }
 C.Roster = Roster
 
-local REFRESH_EVERY = 60
 local EDIT_OFFICER_NOTE = 12     -- position in the rank's permissions: from memory, /cprobe lists them to check
 local FALLBACK_MAX_RANK = 1      -- if no rank says it can edit officer notes: guild master and the next one down
 
-local nextAsk = 0
 local lastRank
 
 local function officerRanks()
@@ -30,23 +28,19 @@ local function officerRanks()
 end
 
 local function read()
-  local total = C.Global("GetNumGuildMembers")
-  if type(total) ~= "number" or total == 0 then return false end
+  local Guild = Core.Guild
+  if not Guild:Known() then return false end
   local byName = {}
   local fingerprint = {}
-  for i = 1, total do
-    local name, _, rankIndex, _, _, _, _, _, online, _, classFile, _, _, _, _, _, guid = C.Global("GetGuildRosterInfo", i)
-    local short = C.Short(name)
-    if short then
-      byName[short] = { rank = rankIndex, online = online, class = classFile, guid = guid, index = i }
-      if classFile then Roster.classOf[short] = classFile end
-      fingerprint[#fingerprint + 1] = short .. tostring(rankIndex)
-    end
+  for _, row in ipairs(Guild:Members()) do
+    byName[row.name] = { rank = row.rank, online = row.online, class = row.class, guid = row.guid }
+    if row.class then Roster.classOf[row.name] = row.class end
+    fingerprint[#fingerprint + 1] = row.name .. tostring(row.rank)
   end
   if next(byName) == nil then return false end
   table.sort(fingerprint)
   local stamp = table.concat(fingerprint, ";")
-  Roster.byName, Roster.count = byName, total
+  Roster.byName, Roster.count = byName, Guild.count
   Roster.ranks = officerRanks()
   if stamp ~= lastRank then
     lastRank = stamp
@@ -112,23 +106,11 @@ function Roster:WatchRanks()
   end
 end
 
-function Roster:Ask()
-  if C.In("C_ChatInfo", "InChatMessagingLockdown") then return end
-  if not C.Global("IsInGuild") then return end
-  C.In("C_GuildInfo", "GuildRoster")
-end
-
-function Roster:Tick()
-  local now = C.Clock()
-  if now >= nextAsk then
-    nextAsk = now + REFRESH_EVERY
-    self:Ask()
-  end
-end
-
-Core:On("GUILD_ROSTER_UPDATE", "council.roster", function() read() end)
-Core:On("GUILD_RANKS_UPDATE", "council.roster", function() read() end)
-Core:OnLogin(function() Roster:Ask() end)
+-- Core.Guild reads the roster and says when it changed; rank permissions can change without a member changing, so a
+-- ranks update is read again once Core has read it too.
+Core:Listen("NORGANNON_GUILD_ROSTER", "council.roster", function() read() end)
+Core:On("GUILD_RANKS_UPDATE", "council.roster", function() Core:NextFrame(read, "council.roster") end)
+Core:OnLogin(function() Core.Guild:Watch("council") end)
 
 -------------------------------------------------------------------------------------------
 -- The group

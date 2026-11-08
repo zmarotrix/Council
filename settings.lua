@@ -41,25 +41,13 @@ Core:OnLogin(function()
       end
     end, "%.0f", 1)
 
-  list:Header("How it starts")
-  list:Toggle("Show the minimap button", "Council is also in the game's addon menu and opens with /council.",
-    function() return Core.MinimapButton:IsShown("council") end,
-    function(on) Core.MinimapButton:SetShown("council", on) end)
 
   page:SetScript("OnShow", function() list:Refresh() end)
   C.settingsPage, C.settingsList = page, list
-  C.settingsCategory = Core:AddSettingsPage(page, "Council")
+  C:AddSettingsPage(page)
 
   local function perf(label, tbl, method) Core:RegisterPerf("Council: " .. label, tbl, method, "council") end
   perf("replay", C.State, "Build")
   perf("window refresh", C.Window, "Refresh")
   perf("loot line", C.Capture, "OnLootText")
 end)
-
-function C:OpenSettings()
-  if self.settingsCategory and Settings and Settings.OpenToCategory then
-    Settings.OpenToCategory(self.settingsCategory:GetID())
-  else
-    Core:OpenSettings()
-  end
-end

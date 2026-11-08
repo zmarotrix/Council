@@ -6,65 +6,70 @@
 
 local ADDON = ...
 local Core = NorgannonCore
-local DB = NorgannonDB
 
 local C = Council
-C.addonName = ADDON or "Council"
 
-if not (Core and Core:Require(1, 16)) or not (DB and DB:RequireSchema(1, 4)) then
+if not (Core and Core.NewAddon) then
   C.disabled = true
-  C_Timer.After(5, function()
-    print("|cffc3e05aCouncil|r needs NorgannonDB 1.4 and NorgannonDB Core 1.16 or newer; it is turned off.")
-  end)
+  print("Council needs NorgannonDB Core 1.20 or newer; it is turned off.")
   return
 end
 
-C.PREFIX = "|cffc3e05aCouncil|r"
-function C:Print(msg) Core:Print(msg, self.PREFIX) end
-
 -------------------------------------------------------------------------------------------
--- Calling the client. Any call may be missing, refuse, or answer in secret values, which count as no answer.
+-- Saved data
 -------------------------------------------------------------------------------------------
 
-local function clean(ok, ...)
-  if not ok then return nil end
-  local n = select("#", ...)
-  if n == 0 then return nil end
-  local out = { ... }
-  for i = 1, n do
-    if Core.IsSecret(out[i]) then out[i] = nil end
-  end
-  return unpack(out, 1, n)
-end
+C.DEFAULTS = {
+  autoOpen = true,    -- the window opens when the loot master opens loot worth rolling on
+  announce = true,    -- starting a roll says so in raid chat
+  rollSeconds = 15,   -- how long a roll stays open
+  watchRolls = true,  -- show the roll popup when someone else is running the loot
+  askMasterLoot = true, -- targeting a boss as leader asks about switching to master loot
+  guilds = {},        -- [realm/guild] = the guild's record
+  personal = {},      -- [first name] = a character's own record, for groups that aren't the guild's
+}
 
----The global function name(...), with errors and secret values turned into nil.
-function C.Global(name, ...)
-  local fn = rawget(_G, name)
-  if not fn then return nil end
-  return clean(pcall(fn, ...))
-end
+-- The suite's plumbing (Core:NewAddon): version checks, CouncilDB with its defaults, the slash command, the minimap row
+-- and the add-on menu. Left-click and /council open the window; right-click opens settings.
+Core:NewAddon("council", {
+  folder = ADDON, api = { 1, 20 }, data = { 1, 4 },
+  db = "CouncilDB", defaults = C.DEFAULTS,
+  slash = { "/council" },
+  commands = {
+    loot = { function() C.Popups:ShowList() end, "the loot list" },
+    roll = { function(rest)
+      -- an item from your bags: /council roll [link], or 2x[link] for two winners
+      local copies = tonumber((rest or ""):match("(%d+)x")) or 1
+      local link = (rest or ""):match("(|c.-|h|r)")
+      local id = link and tonumber(link:match("item:(%d+)"))
+      if id then
+        C.Popups:Roll(C.LootMaster:AddManual(id, link, copies))
+      else
+        C:Print("/council roll, then shift-click an item from your bags. 2x before it means two top rolls win.")
+      end
+    end, "[item]: roll an item from your bags (2x[item] for two winners)" },
+    tonight = { function() C.Window:Open("tonight") end, "tonight's loot" },
+    reserves = { function() C.Window:Open("reserves") end, "soft reserves" },
+    history = { function() C.Window:Open("history") end, "who got what" },
+    players = { function() C.Window:Open("players") end, "everyone's record" },
+    records = { function() C.Window:Open("records") end, "the shared record" },
+    status = { function() C:PrintStatus() end, "where things stand" },
+  },
+})
+if C.disabled then return end
 
----The namespaced client function ns.name(...).
-function C.In(ns, name, ...)
-  local t = rawget(_G, ns)
-  local fn = t and t[name]
-  if not fn then return nil end
-  return clean(pcall(fn, ...))
-end
+-------------------------------------------------------------------------------------------
+-- Calling the client: Core's helpers. Any call may be missing, refuse, or answer in secret values.
+-------------------------------------------------------------------------------------------
 
-function C.Now() return C.Global("GetServerTime") or time() end
+C.Global, C.In, C.Now = Core.Global, Core.In, Core.Now
 function C.Clock() return GetTime() end
 
----A player's name as records hold it: bare on our own realm, with the realm otherwise. nil for a secret name.
----Forever's loot lines and C_LootHistory say "Arhara Dawnstrider" where the roster and UnitName say "Arhara" (seen in
----/cprobe's results), so anything after a space is dropped, or nobody's reserve would match their loot.
----This is who someone is in the records, not an address: a whisper to it fails, so Transport keeps the full name for those.
-function C.Short(name)
-  if type(name) ~= "string" or Core.IsSecret(name) or name == "" then return nil end
-  name = name:match("^%S+") or name
-  local short = C.Global("Ambiguate", name, "none")
-  return short or name
-end
+---A player's name as records hold it: the first name (Core.Names.First). Forever's loot lines and C_LootHistory say
+---"Arhara Dawnstrider" where the roster and UnitName say "Arhara", so records go by the first name, or nobody's reserve
+---would match their loot. This is who someone is, not an address: a whisper to it fails (Transport and Core.Names keep
+---the full names).
+C.Short = Core.Names.First
 
 function C.Me() return C.Short((C.Global("UnitName", "player"))) end
 
@@ -164,7 +169,6 @@ function C.Tick()
   if C.Transport then C.Transport:Tick() end
   local guild = C.guildRecord
   if guild and guild.sync then guild.sync:Tick() end
-  if C.Roster then C.Roster:Tick() end
   if C.LootMaster then C.LootMaster:Tick() end
 end
 
@@ -262,27 +266,6 @@ end
 -- Saved data
 -------------------------------------------------------------------------------------------
 
-local DEFAULTS = {
-  autoOpen = true,    -- the window opens when the loot master opens loot worth rolling on
-  announce = true,    -- starting a roll says so in raid chat
-  rollSeconds = 15,   -- how long a roll stays open
-  watchRolls = true,  -- show the roll popup when someone else is running the loot
-  askMasterLoot = true, -- targeting a boss as leader asks about switching to master loot
-}
-
-Core:On("ADDON_LOADED", C, function(_, name)
-  if name ~= C.addonName then return end
-  Core:Off("ADDON_LOADED", C)
-  local saved = rawget(_G, "CouncilDB")
-  CouncilDB = type(saved) == "table" and saved or {}
-  C.db = CouncilDB
-  for k, v in pairs(DEFAULTS) do
-    if C.db[k] == nil then C.db[k] = v end
-  end
-  C.db.guilds = C.db.guilds or {}
-  C.db.personal = C.db.personal or {}
-end)
-
 Core:OnLogin(function()
   if not C.db then return end
   C:GuildRecord()
@@ -303,39 +286,6 @@ function C:Toggle()
   if win:IsShown() then win:Hide() else self.Window:Open() end
 end
 
-Core:RegisterAddon("council", {
-  version = C_AddOns and C_AddOns.GetAddOnMetadata(C.addonName, "Version") or "0.1.0",
-  open = function() C:Toggle() end,
-})
-
-SLASH_COUNCIL1 = "/council"
-SlashCmdList["COUNCIL"] = function(msg)
-  local lower = string.lower(strtrim(msg or ""))
-  if lower == "" then
-    C:Toggle()
-  elseif lower == "settings" or lower == "options" then
-    C:OpenSettings()
-  elseif lower == "loot" then
-    C.Popups:ShowList()
-  elseif lower == "tonight" or lower == "reserves" or lower == "history" or lower == "players" or lower == "records" then
-    C.Window:Open(lower)
-  elseif lower == "status" then
-    C:PrintStatus()
-  elseif lower:match("^roll") then
-    -- an item from your bags: /council roll [link], or 2x[link] for two winners
-    local copies = tonumber((msg or ""):match("(%d+)x")) or 1
-    local link = (msg or ""):match("(|c.-|h|r)")
-    local id = link and tonumber(link:match("item:(%d+)"))
-    if id then
-      C.Popups:Roll(C.LootMaster:AddManual(id, link, copies))
-    else
-      C:Print("/council roll, then shift-click an item from your bags. 2x before it means two top rolls win.")
-    end
-  else
-    C:Print("/council opens the window. Also: /council loot, roll [item], tonight, reserves, history, players, records, settings, status")
-  end
-end
-
 ---A short account of where things stand, for checking in game.
 function C:PrintStatus()
   local rec = self:GuildRecord()
@@ -346,20 +296,3 @@ function C:PrintStatus()
   self:Print("Loot lines this session: " .. tostring(self.Capture:SessionLineCount()) .. ". Lines the game kept secret: " .. tostring(self.Capture.secretLines))
   self:Print("Loot master: " .. tostring(self.LootMaster:MasterName()) .. ". Method: " .. tostring(self.LootMaster:MethodName()))
 end
-
-local function onClick(button)
-  if button == "RightButton" then C:OpenSettings() else C:Toggle() end
-end
-local function tooltip(tt)
-  tt:AddLine("Council", .765, .878, .353)
-  tt:AddLine("Your guild's loot and records", 1, 1, 1)
-  tt:AddLine("Click: open or close  ·  Right-click: settings  ·  Drag: move", .43, .4, .32)
-end
-Core:OnLogin(function() Core.MinimapButton:Add("council", { onClick = onClick, tooltip = tooltip }) end)
-function Council_OnAddonCompartmentClick(_, button) onClick(button) end
-function Council_OnAddonCompartmentEnter(_, frame)
-  GameTooltip:SetOwner(frame, "ANCHOR_LEFT")
-  tooltip(GameTooltip)
-  GameTooltip:Show()
-end
-function Council_OnAddonCompartmentLeave() GameTooltip:Hide() end

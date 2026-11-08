@@ -11,7 +11,7 @@ local Window = { panes = {} }
 C.Window = Window
 
 local W, H = 880, 600
-local ROW_H = 36
+
 
 local TABS = {
   { key = "tonight", label = "Tonight" }, { key = "reserves", label = "Reserves" }, { key = "history", label = "History" },
@@ -20,93 +20,10 @@ local TABS = {
 
 local win
 
--------------------------------------------------------------------------------------------
--- A list of rows: { group } or { id, link, title, sub, right, actions = { { text, run, off, tip, style } }, onClick }
--------------------------------------------------------------------------------------------
-
-local function actionButton(row, i)
-  local b = UI.Button(row, "", "quiet", function(self)
-    local action = self.action
-    if action and not action.off then action.run() end
-  end)
-  b:SetHeight(22)
-  b:SetScript("OnEnter", function(self)
-    if self.action and self.action.tip then
-      GameTooltip:SetOwner(self, "ANCHOR_TOP")
-      GameTooltip:AddLine(self.action.tip, 1, 1, 1, true)
-      GameTooltip:Show()
-    end
-  end)
-  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-  row.buttons[i] = b
-  return b
-end
-
-local function createRow(row, content)
-  row.buttons = {}
-  row.icon = content:CreateTexture(nil, "ARTWORK")
-  row.icon:SetSize(24, 24)
-  row.icon:SetPoint("LEFT", 8, 0)
-  row.icon:SetTexCoord(.07, .93, .07, .93)
-  row.title = UI.Text(content, "body", 14)
-  row.title:SetPoint("TOPLEFT", row, "TOPLEFT", 40, -3)
-  row.title:SetWordWrap(false)
-  row.sub = UI.Text(content, "body", 12, Colors.muted)
-  row.sub:SetPoint("TOPLEFT", row.title, "BOTTOMLEFT", 0, -1)
-  row.sub:SetWordWrap(false)
-  row.right = UI.Text(content, "body", 13)
-end
-
-local function updateRow(row, item, titleY)
-  row.icon:SetShown(item.id ~= nil)
-  if item.id then row.icon:SetTexture(C.In("C_Item", "GetItemIconByID", item.id) or 134400) end
-  row.title:ClearAllPoints()
-  row.title:SetPoint("TOPLEFT", row, "TOPLEFT", item.id and 40 or 10, item.sub and -3 or titleY)
-  row.title:SetText(item.title or "")
-  row.sub:SetText(item.sub or "")
-  local previous
-  for i = 1, math.max(#row.buttons, #(item.actions or {})) do
-    local action = item.actions and item.actions[i]
-    local b = row.buttons[i] or (action and actionButton(row, i))
-    if b then
-      b.action = action
-      b:SetShown(action ~= nil)
-      if action then
-        b:SetLabel(action.text)
-        b:SetWidth(action.width or 74)
-        b:SetAlpha(action.off and .4 or 1)
-        b:ClearAllPoints()
-        if previous then b:SetPoint("RIGHT", previous, "LEFT", -4, 0) else b:SetPoint("RIGHT", row, "RIGHT", -12, 0) end
-        previous = b
-      end
-    end
-  end
-  row.right:ClearAllPoints()
-  if previous then row.right:SetPoint("RIGHT", previous, "LEFT", -8, 0) else row.right:SetPoint("RIGHT", row, "RIGHT", -12, 0) end
-  row.right:SetText(item.right or "")
-end
-
----A virtual list of these rows. Hovering one with an item shows the item's tooltip.
+---The row list every pane shares (Core's UI.ActionList): { group } or { id, link, title, sub, right, onClick,
+---actions = { { text, run, off, tip, width } } }. A row with an item shows its icon and, hovered, its tooltip.
 function Window.RowList(parent, rowHeight)
-  local height = rowHeight or ROW_H
-  local titleY = -math.floor((height - 14) / 2)
-  return UI.List(parent, {
-    rowHeight = height,
-    createRow = createRow,
-    updateRow = function(row, item) updateRow(row, item, titleY) end,
-    groupBand = true,
-    onClick = function(item, _, button)
-      if item.onClick then item.onClick(button) end
-    end,
-    onEnter = function(row, item)
-      if item.id then
-        GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-        if item.link then GameTooltip:SetHyperlink(item.link) else GameTooltip:SetItemByID(item.id) end
-        GameTooltip:Show()
-      end
-    end,
-    onLeave = function() GameTooltip:Hide() end,
-  })
+  return UI.ActionList(parent, { rowHeight = rowHeight or 36 })
 end
 
 ---A line of plain text across the top of something, anchored by the caller.
