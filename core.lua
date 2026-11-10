@@ -11,7 +11,7 @@ local C = Council
 
 if not (Core and Core.NewAddon) then
   C.disabled = true
-  print("Council needs NorgannonDB Core 1.25 or newer; it is turned off.")
+  print("Council needs Norgannon Core 1.25 or newer; it is turned off.")
   return
 end
 
