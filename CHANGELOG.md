@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2 (2026-11-09)
+
+- Asks for Norgannon Core 1.25 or newer, the first Core with everything it uses. An older Core now gets a clear "update Norgannon Core" message instead of errors.
+
 ## 0.3.1, 2026-11-07
 
 - Add-on messages now go through NorgannonDB Core 1.21's `Core.Net`, which holds Council's own transport code. Nothing

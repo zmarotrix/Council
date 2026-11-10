@@ -11,7 +11,7 @@ local C = Council
 
 if not (Core and Core.NewAddon) then
   C.disabled = true
-  print("Council needs NorgannonDB Core 1.20 or newer; it is turned off.")
+  print("Council needs NorgannonDB Core 1.25 or newer; it is turned off.")
   return
 end
 
@@ -32,7 +32,7 @@ C.DEFAULTS = {
 -- The suite's plumbing (Core:NewAddon): version checks, CouncilDB with its defaults, the slash command, the minimap row
 -- and the add-on menu. Left-click and /council open the window; right-click opens settings.
 Core:NewAddon("council", {
-  folder = ADDON, api = { 1, 21 }, data = { 1, 4 },
+  folder = ADDON, api = { 1, 25 }, data = { 1, 4 },
   db = "CouncilDB", defaults = C.DEFAULTS,
   slash = { "/council" },
   commands = {

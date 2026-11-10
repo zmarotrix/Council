@@ -3,7 +3,7 @@
 ## Category: NorgannonDB
 ## Notes: Your guild's loot and records: reserves and SR+, rolls, master loot, and a shared history of who got what in every raid and dungeon. Powered by NorgannonDB. /council
 ## Author: Maro
-## Version: 0.3.1
+## Version: 0.3.2
 ## X-License: All Rights Reserved
 ## Dependencies: NorgannonDB, NorgannonDB_Core
 ## SavedVariables: CouncilDB
